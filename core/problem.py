@@ -47,6 +47,12 @@ LOAD_FACTOR_ELEC = 0.35
 GREEN_ZONE_CENTER = (0.0, 0.0)
 GREEN_ZONE_RADIUS = 10.0
 
+# 绿色区限行政策 (问题2)
+# 8:00 - 16:00 禁止燃油车进入绿色区
+GREEN_BAN_START = 8.0
+GREEN_BAN_END = 16.0
+POLICY_PENALTY_PER_VIOLATION = 1_000_000.0  # 软罚项, 仅 soft 模式
+
 
 # ========= 数据类 =========
 
@@ -90,6 +96,11 @@ class Problem:
     customers: List[Customer]         # [0]=depot, [1..N]=customer
     distance: 'np.ndarray'            # (N+1) x (N+1) 距离矩阵 km
     vehicle_types: List[VehicleType] = field(default_factory=lambda: VEHICLE_TYPES)
+    # 问题2: 绿色区限行政策开关
+    # 'off' = 问题1, 无约束;
+    # 'hard' = 问题2, 燃油车禁入时段进绿色区 → infeasible;
+    # 'soft' = ALNS 搜索过渡, 违反加大额罚项但仍探索.
+    policy_mode: str = "off"
 
     @property
     def n_customers(self) -> int:

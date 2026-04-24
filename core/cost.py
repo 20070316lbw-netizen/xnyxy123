@@ -17,6 +17,7 @@ from core.problem import (
     FUEL_PRICE, ELEC_PRICE, ETA_FUEL, ETA_ELEC, CARBON_PRICE,
     START_COST, EARLY_PENALTY, LATE_PENALTY,
     LOAD_FACTOR_FUEL, LOAD_FACTOR_ELEC,
+    GREEN_BAN_START, GREEN_BAN_END, POLICY_PENALTY_PER_VIOLATION,
 )
 
 
@@ -137,6 +138,7 @@ class RouteCost:
     carbon_cost: float = 0.0
     early_cost: float = 0.0
     late_cost: float = 0.0
+    policy_cost: float = 0.0   # 问题2: 绿色区限行软罚项
     total_distance: float = 0.0
     total_time: float = 0.0
     total_load_kg: float = 0.0
@@ -145,11 +147,12 @@ class RouteCost:
     carbon_kg: float = 0.0
     feasible: bool = True
     reason: str = ""           # 不可行原因
+    policy_violations: int = 0  # 违反绿色区限行次数
 
     @property
     def total(self) -> float:
         return (self.start_cost + self.energy_cost + self.carbon_cost
-                + self.early_cost + self.late_cost)
+                + self.early_cost + self.late_cost + self.policy_cost)
 
     def as_dict(self) -> dict:
         return dict(
@@ -159,13 +162,20 @@ class RouteCost:
             carbon_cost=self.carbon_cost,
             early_cost=self.early_cost,
             late_cost=self.late_cost,
+            policy_cost=self.policy_cost,
             total_distance=self.total_distance,
             total_time=self.total_time,
             energy_used=self.energy_used,
             carbon_kg=self.carbon_kg,
             feasible=self.feasible,
             reason=self.reason,
+            policy_violations=self.policy_violations,
         )
+
+
+def _overlaps_ban(t_enter: float, t_exit: float) -> bool:
+    """判断 [t_enter, t_exit] 是否与禁行时段 [8, 16] 重叠。"""
+    return t_enter < GREEN_BAN_END and t_exit > GREEN_BAN_START
 
 
 def evaluate_route(
@@ -223,6 +233,9 @@ def evaluate_route(
     # 车从 depot 出发时是满的（已装货），每次送完一个客户载重递减
     current_load_kg = carry_kg
 
+    policy_active = getattr(prob, "policy_mode", "off") != "off"
+    is_fuel = not vtype.is_electric
+
     for i in range(len(route) - 1):
         a, b = route[i], route[i + 1]
         d = prob.distance[a, b]
@@ -254,7 +267,23 @@ def evaluate_route(
                 t_service_start = t_arrival
 
             # 服务后离开时间
-            t = t_service_start + SERVICE_TIME
+            t_service_end = t_service_start + SERVICE_TIME
+
+            # 政策约束: 燃油车在 [8, 16] 禁入绿色区
+            # 一次违规 = 该客户在绿色区 && 服务区间与禁行窗口有重叠
+            if (policy_active and is_fuel and cust.in_green_zone
+                    and _overlaps_ban(t_service_start, t_service_end)):
+                rc.policy_violations += 1
+                if prob.policy_mode == "hard":
+                    rc.feasible = False
+                    if not rc.reason:
+                        rc.reason = (
+                            f"绿色区限行: 燃油车 {vtype.name} 于 "
+                            f"{t_service_start:.2f}h 服务绿色区客户 c{b}")
+                else:  # soft
+                    rc.policy_cost += POLICY_PENALTY_PER_VIOLATION
+
+            t = t_service_end
 
             # 卸货，载重减少
             if demand_override is None:

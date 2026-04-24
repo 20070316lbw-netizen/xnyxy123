@@ -60,12 +60,20 @@ def solution_summary(prob: Problem, sol: Solution) -> dict:
     total_carbon = sum(d.carbon_cost for d in details)
     total_early = sum(d.early_cost for d in details)
     total_late = sum(d.late_cost for d in details)
+    total_policy = sum(d.policy_cost for d in details)
+    total_violations = sum(d.policy_violations for d in details)
     total_co2 = sum(d.carbon_kg for d in details)
 
     # 车辆类型统计
     type_used = {}
+    ev_routes = 0
+    fuel_routes = 0
     for r in sol.routes:
         type_used[r.vtype.name] = type_used.get(r.vtype.name, 0) + 1
+        if r.vtype.is_electric:
+            ev_routes += 1
+        else:
+            fuel_routes += 1
 
     return dict(
         total_cost=total,
@@ -79,8 +87,12 @@ def solution_summary(prob: Problem, sol: Solution) -> dict:
         carbon_cost=total_carbon,
         early_cost=total_early,
         late_cost=total_late,
+        policy_cost=total_policy,
+        policy_violations=total_violations,
         carbon_kg=total_co2,
         type_used=type_used,
+        ev_routes=ev_routes,
+        fuel_routes=fuel_routes,
     )
 
 
