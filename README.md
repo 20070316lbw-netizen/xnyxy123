@@ -65,10 +65,12 @@ uv run python main.py summary            # 所有保存结果的摘要
 │   └── piggyback.py
 │
 ├── viz/                 ← 可视化
-│   └── visualize.py        路径图 + 螺旋序图
+│   ├── visualize.py        路径图 + 螺旋序图 (库函数)
+│   └── gen_figs.py         一键生成论文图 fig1~fig4 (脚本)
 │
 ├── data/                ← 题目数据 (xlsx) 与原题 PDF
-├── issue/               ← 阶段性进度笔记 (issue_01 / 02 / 03)
+├── figs/                ← 论文用图片 (gen_figs 输出)
+├── A202611902032.docx   ← 比赛指定承诺书 (随压缩包一起提交)
 └── result_q{1,2,3}.pkl  ← 三个问题的最优解快照 (可直接被 viz 读取)
 ```
 
@@ -151,6 +153,19 @@ uv run python core/cost.py             # 速度分段 + 单边行驶时间 + 路
 uv run python core/problem.py          # 打印参数概览
 uv run python construct/tiered_init.py # Q1 初始解
 uv run python construct/tiered_init_q2.py # Q2 初始解 (含政策检查)
+```
+
+### 重新生成论文图片
+
+`figs/` 下的四张图都由 `viz/gen_figs.py` 一次性生成，依赖根目录的 `result_q1.pkl` 与 `result_q2.pkl`：
+
+```bash
+# 先确保两个 pkl 已经存在 (没有的话先跑一次 q1 / q2)
+uv run python main.py q1 --iters 1200
+uv run python main.py q2 --iters 1200
+
+# 重新生成 figs/fig{1,2,3,4}_*.png
+uv run python viz/gen_figs.py
 ```
 
 主要可调参数都集中在 `core/problem.py`，无需深入算法层。

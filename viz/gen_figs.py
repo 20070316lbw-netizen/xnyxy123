@@ -1,4 +1,6 @@
-# gen_figs.py  —— 放在项目根目录，与 core/ alns/ 同级
+# viz/gen_figs.py
+# 用法 (从项目根目录执行): uv run python viz/gen_figs.py
+# 依赖: result_q1.pkl / result_q2.pkl 已存在于项目根目录
 import pickle
 import math
 import os
