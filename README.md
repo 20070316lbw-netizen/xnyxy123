@@ -70,7 +70,7 @@ uv run python main.py summary            # 所有保存结果的摘要
 │
 ├── data/                ← 题目数据 (xlsx) 与原题 PDF
 ├── figs/                ← 论文用图片 (gen_figs 输出)
-├── A202611902032.docx   ← 比赛指定文档 (随压缩包一起提交)
+├── A202611902032.docx   ← 比赛指定承诺书 (随压缩包一起提交)
 └── result_q{1,2,3}.pkl  ← 三个问题的最优解快照 (可直接被 viz 读取)
 ```
 
