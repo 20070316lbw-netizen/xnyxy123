@@ -7,6 +7,7 @@
 
 稳定性: 记录受影响客户与原承诺车辆的差异, 作为改派率指标.
 """
+
 from __future__ import annotations
 
 import time as _time
@@ -27,6 +28,7 @@ from alns.main import run_alns, ALNSConfig
 
 
 # ========= 事件应用 =========
+
 
 def _apply_new_order(prob: Problem, sol: Solution, ev: Event) -> None:
     """把新订单写入 Problem 里对应客户的 demand/tw."""
@@ -86,6 +88,7 @@ _APPLIERS = {
 
 # ========= 快速重调度层 =========
 
+
 def _collect_pending_insertions(prob: Problem, sol: Solution) -> List[int]:
     """找出还没在当前解里但有需求的客户 id。"""
     covered = set()
@@ -98,46 +101,64 @@ def _collect_pending_insertions(prob: Problem, sol: Solution) -> List[int]:
     return pending
 
 
-def fast_repair(prob: Problem, sol: Solution,
-                rng_seed: int = 0) -> Tuple[Solution, int]:
-    """快速层: 对当前未覆盖客户做贪心插入.
-    返回 (修补后的解, 成功插入客户数)."""
+def fast_repair(
+    prob: Problem, sol: Solution, rng_seed: int = 0
+) -> Tuple[Solution, int]:
     import random
 
     rng = random.Random(rng_seed)
     pending = _collect_pending_insertions(prob, sol)
     inserted = 0
-    failed = []
+
     for cid in pending:
         c = prob.customers[cid]
         ok = _insert_one_customer(prob, sol, cid, c.demand_kg, c.demand_m3, rng)
         if ok:
             inserted += 1
         else:
-            failed.append(cid)
+            # 插入失败：强制拆分，按最大可用车的容量分批开新路径
+            remain_kg = c.demand_kg
+            remain_m3 = c.demand_m3
+            splits = 0
+            while remain_kg > 1e-6 and splits < 10:
+                # 找最大可用车
+                available = _compute_available(sol)
+                best_vt = None
+                for vt in sorted(VEHICLE_TYPES, key=lambda v: -v.capacity_kg):
+                    if available[vt.type_id] > 0:
+                        best_vt = vt
+                        break
+                if best_vt is None:
+                    # 车全用完了，透支车型0
+                    best_vt = VEHICLE_TYPES[0]
 
-    # 兜底：贪心插入失败的客户强制开新路径（忽略时间窗可行性，确保 _demand_covered 能通过）
-    available = _compute_available(sol)
-    for cid in failed:
-        c = prob.customers[cid]
-        for vt in sorted(VEHICLE_TYPES, key=lambda v: v.capacity_kg):
-            if (available[vt.type_id] > 0
-                    and vt.capacity_kg >= c.demand_kg
-                    and vt.capacity_m3 >= c.demand_m3):
-                sol.routes.append(Route(
-                    vtype=vt, nodes=[0, cid, 0],
-                    delivered_kg={cid: c.demand_kg},
-                    delivered_m3={cid: c.demand_m3},
-                ))
-                available[vt.type_id] -= 1
-                inserted += 1
-                break
+                # 按重量和体积双约束决定本次取多少
+                take_kg = min(remain_kg, best_vt.capacity_kg)
+                # 体积按重量比例估算
+                take_m3 = (
+                    remain_m3 * (take_kg / remain_kg) if remain_kg > 0 else remain_m3
+                )
+                take_m3 = min(take_m3, best_vt.capacity_m3)
+
+                sol.routes.append(
+                    Route(
+                        vtype=best_vt,
+                        nodes=[0, cid, 0],
+                        delivered_kg={cid: take_kg},
+                        delivered_m3={cid: take_m3},
+                    )
+                )
+                remain_kg -= take_kg
+                remain_m3 -= take_m3
+                splits += 1
+            inserted += 1  # 强制算插入成功
 
     return sol, inserted
 
 
-def reoptimize(prob: Problem, sol: Solution,
-               iterations: int = 200, seed: int = 17) -> Solution:
+def reoptimize(
+    prob: Problem, sol: Solution, iterations: int = 200, seed: int = 17
+) -> Solution:
     """优化层: 跑小步 ALNS."""
     cfg = ALNSConfig(
         max_iterations=iterations,
@@ -154,6 +175,7 @@ def reoptimize(prob: Problem, sol: Solution,
 
 
 # ========= 稳定性度量 =========
+
 
 def _customer_route_signature(sol: Solution) -> Dict[int, frozenset]:
     """客户 → 同车伙伴集合 (路径内其他客户的 frozenset).
@@ -183,6 +205,7 @@ def stability_delta(before: Solution, after: Solution) -> float:
 
 
 # ========= 场景执行器 =========
+
 
 @dataclass
 class ScenarioResult:
@@ -269,11 +292,15 @@ def apply_scenario(
     if verbose:
         print(f"[{scenario.name}] {scenario.description}")
         print(f"  事件数: {res.num_events}  分类: {res.events_by_type}")
-        print(f"  成本: {cost_before:.0f} → (快速) {cost_fast:.0f} "
-              f"→ (优化) {cost_reopt:.0f}  Δ={cost_reopt - cost_before:+.0f}")
+        print(
+            f"  成本: {cost_before:.0f} → (快速) {cost_fast:.0f} "
+            f"→ (优化) {cost_reopt:.0f}  Δ={cost_reopt - cost_before:+.0f}"
+        )
         print(f"  响应时间: 快速 {t_fast_ms:.1f}ms, 优化 {t_reopt_ms:.1f}ms")
         print(f"  晚到: {late_before:.0f} → {late_after:.0f}")
-        print(f"  路径数: {res.routes_before} → {res.routes_after}  "
-              f"改派率: {reassigned*100:.1f}%")
+        print(
+            f"  路径数: {res.routes_before} → {res.routes_after}  "
+            f"改派率: {reassigned * 100:.1f}%"
+        )
 
     return sol, res
