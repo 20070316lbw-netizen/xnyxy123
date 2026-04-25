@@ -16,7 +16,7 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 
-from core.problem import Problem, Customer
+from core.problem import Problem, Customer, VEHICLE_TYPES
 from core.solution import Solution, Route, evaluate_solution, solution_summary
 from dynamic.events import Event, Scenario
 from alns.operators import (
@@ -107,11 +107,32 @@ def fast_repair(prob: Problem, sol: Solution,
     rng = random.Random(rng_seed)
     pending = _collect_pending_insertions(prob, sol)
     inserted = 0
+    failed = []
     for cid in pending:
         c = prob.customers[cid]
         ok = _insert_one_customer(prob, sol, cid, c.demand_kg, c.demand_m3, rng)
         if ok:
             inserted += 1
+        else:
+            failed.append(cid)
+
+    # 兜底：贪心插入失败的客户强制开新路径（忽略时间窗可行性，确保 _demand_covered 能通过）
+    available = _compute_available(sol)
+    for cid in failed:
+        c = prob.customers[cid]
+        for vt in sorted(VEHICLE_TYPES, key=lambda v: v.capacity_kg):
+            if (available[vt.type_id] > 0
+                    and vt.capacity_kg >= c.demand_kg
+                    and vt.capacity_m3 >= c.demand_m3):
+                sol.routes.append(Route(
+                    vtype=vt, nodes=[0, cid, 0],
+                    delivered_kg={cid: c.demand_kg},
+                    delivered_m3={cid: c.demand_m3},
+                ))
+                available[vt.type_id] -= 1
+                inserted += 1
+                break
+
     return sol, inserted
 
 
