@@ -13,24 +13,26 @@
 
 ## 用法
 
+三个 `result_q*.pkl` 都可直接读取并画图：
+
 ```python
-from viz.visualize import plot_routes, plot_spiral_order
 import pickle
-
-with open('result_q1.pkl', 'rb') as f:
-    data = pickle.load(f)
-
 from core.data_loader import load_problem
+from viz.visualize import plot_routes
+
 prob = load_problem()
-plot_routes(prob, data['best'], 'Q1 Optimal Solution', 'figs/q1_best.png')
+
+# Q1 最优解
+with open('result_q1.pkl', 'rb') as f:
+    q1 = pickle.load(f)
+plot_routes(prob, q1['best'], 'Q1 Optimal', 'figs/q1_best.png')
+
+# Q2 最优解 (注意 policy_mode 设为 hard, 颜色才能区分 EV/燃油)
+prob2 = load_problem(); prob2.policy_mode = 'hard'
+with open('result_q2.pkl', 'rb') as f:
+    q2 = pickle.load(f)
+plot_routes(prob2, q2['best'], 'Q2 Policy-Feasible', 'figs/q2_best.png')
 ```
-
-## 已生成的图
-
-在 `figs/` 目录下（如果之前跑过 `visualize.py`）：
-- `spiral_order_inout.png` / `spiral_order_outin.png`：螺旋序可视化
-- `init_sol_*.png`：初始解路径图
-- `q1_best.png` / `q1_init.png`：问题1 最优解 vs 初始解
 
 ## 后续扩展
 
@@ -39,6 +41,12 @@ plot_routes(prob, data['best'], 'Q1 Optimal Solution', 'figs/q1_best.png')
 - [ ] 成本分解饼图
 - [ ] 车型使用柱状图
 - [ ] 时间窗到达时刻甘特图
-- [ ] 问题2 vs 问题1 对比图
+- [ ] 问题2 vs 问题1 对比图（绿色区客户对应的车辆切换）
+- [ ] 问题3 三场景的"扰动前/快速层后/优化层后"三态对比图
 
 这些可以等做到具体问题时再加。
+
+## 注意
+
+- 中文字体：matplotlib 默认无中文字体；脚本里给标题/图例用英文最稳妥
+- `plot_routes` 会自动画出 depot (黑色方块) 与绿色区圆 (半径 10km)
