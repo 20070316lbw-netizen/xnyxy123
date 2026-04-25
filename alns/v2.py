@@ -86,7 +86,7 @@ def run_alns_v2(
             iter_since_improve += 1
             continue
 
-        # 新增: 在 repair 后做局部搜索精修 (每 5 轮做一次, 避免太慢)
+        # 在 repair 后做局部搜索精修 (每 5 轮做一次, 避免太慢)
         if do_local_search and it % 5 == 0:
             candidate = local_search(prob, candidate, rng,
                                       do_2opt=True, do_relocate=True, do_merge=(it % 20 == 0))
